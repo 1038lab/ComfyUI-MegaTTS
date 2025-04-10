@@ -25,6 +25,14 @@ from tts.utils.text_utils.split_text import chunk_text_chinese, chunk_text_engli
 models_dir = folder_paths.models_dir
 model_path = os.path.join(models_dir, "TTS")
 
+try:
+    from tn.chinese.normalizer import Normalizer as ZhNormalizer
+    from tn.english.normalizer import Normalizer as EnNormalizer
+    from langdetect import detect as classify_language
+    TEXT_NORMALIZER_AVAILABLE = True
+except ImportError:
+    TEXT_NORMALIZER_AVAILABLE = False
+
 def convert_audio_format(audio_bytes, target_sr=24000, max_duration=10.0):
     try:
         from pydub import AudioSegment
@@ -78,15 +86,25 @@ def convert_audio_format(audio_bytes, target_sr=24000, max_duration=10.0):
             raise ValueError(f"Could not convert audio format: {e} -> {e2}")
 
 class TTSInferencer:
-    def __init__(self, device=None, ckpt_root=os.path.join(model_path, "MegaTTS3"),
-                 dit_exp_name='diffusion_transformer', frontend_exp_name='aligner_lm',
-                 wavvae_exp_name='wavvae', dur_ckpt_path='duration_lm',
-                 g2p_exp_name='g2p', precision=torch.float16, **kwargs):
+    def __init__(
+            self, 
+            device=None,
+            ckpt_root=os.path.join(model_path, "MegaTTS3"),
+            dit_exp_name='diffusion_transformer',
+            frontend_exp_name='aligner_lm',
+            wavvae_exp_name='wavvae',
+            dur_ckpt_path='duration_lm',
+            g2p_exp_name='g2p',
+            precision=torch.float16,
+            **kwargs
+        ):
         self.sr = 24000
         self.fm = 8
-        self.device = device if device else ('cuda' if torch.cuda.is_available() else 'cpu')
+        if device is None:
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.device = device
         self.precision = precision
-        
+
         self.dit_exp_name = os.path.join(ckpt_root, dit_exp_name)
         self.frontend_exp_name = os.path.join(ckpt_root, frontend_exp_name)
         self.wavvae_exp_name = os.path.join(ckpt_root, wavvae_exp_name)
@@ -95,64 +113,78 @@ class TTSInferencer:
         
         with open(os.devnull, 'w') as f, redirect_stdout(f), redirect_stderr(f):
             self.build_model(self.device)
+
+        if TEXT_NORMALIZER_AVAILABLE:
+            try:
+                self.zh_normalizer = ZhNormalizer(overwrite_cache=False, remove_erhua=False, remove_interjections=False)
+                self.en_normalizer = EnNormalizer(overwrite_cache=False)
+            except Exception as e:
+                print(f"Warning: Failed to initialize text normalizers: {e}")
         
         self.loudness_meter = pyln.Meter(self.sr)
         
     def clean(self):
         import gc
-        self.dur_model = self.dit = self.g2p_model = self.wavvae = None
+        self.dur_model = None
+        self.dit = None
+        self.g2p_model = None
+        self.g2p_tokenizer = None
+        self.wavvae = None
+        self.aligner_lm = None
+        self.ling_dict = None
+        self.token_encoder = None
+        self.length_regulator = None
+        if hasattr(self, 'kv_cache'):
+            self.kv_cache = None
+        if hasattr(self, 'hooks'):
+            self.hooks = None
+        if hasattr(self, 'zh_normalizer'):
+            self.zh_normalizer = None
+        if hasattr(self, 'en_normalizer'):
+            self.en_normalizer = None
+        
         gc.collect()
-        torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     def build_model(self, device):
         set_hparams(exp_name=self.dit_exp_name, print_hparams=False)
-        self._load_linguistic_dict()
-        self._init_duration_model(device)
-        self._init_diffusion_model(device)
-        self._init_aligner_model(device)
-        self._init_g2p_model(device)
-        self._init_wavvae_model(device)
 
-    def _load_linguistic_dict(self):
         current_dir = os.path.dirname(os.path.abspath(__file__))
         ling_dict = json.load(open(f"{current_dir}/tts/utils/text_utils/dict.json", encoding='utf-8-sig'))
-        self.ling_dict = {k: TokenTextEncoder(None, vocab_list=ling_dict[k], replace_oov='<UNK>') 
-                         for k in ['phone', 'tone']}
-        self.token_encoder = self.ling_dict['phone']
+        self.ling_dict = {k: TokenTextEncoder(None, vocab_list=ling_dict[k], replace_oov='<UNK>') for k in ['phone', 'tone']}
+        self.token_encoder = token_encoder = self.ling_dict['phone']
+        ph_dict_size = len(token_encoder)
 
-    def _init_duration_model(self, device):
         from tts.modules.ar_dur.ar_dur_predictor import ARDurPredictor
-        
         hp_dur_model = self.hp_dur_model = set_hparams(f'{self.dur_exp_name}/config.yaml', global_hparams=False)
         hp_dur_model['frames_multiple'] = hparams['frames_multiple']
-        
-        ph_dict_size = len(self.token_encoder)
         self.dur_model = ARDurPredictor(
             hp_dur_model, hp_dur_model['dur_txt_hs'], hp_dur_model['dur_model_hidden_size'],
-            hp_dur_model['dur_model_layers'], ph_dict_size, hp_dur_model['dur_code_size'],
+            hp_dur_model['dur_model_layers'], ph_dict_size,
+            hp_dur_model['dur_code_size'],
             use_rot_embed=hp_dur_model.get('use_rot_embed', False))
         self.length_regulator = LengthRegulator()
-        
         load_ckpt(self.dur_model, f'{self.dur_exp_name}', 'dur_model')
-        self.dur_model.eval().to(device)
+        self.dur_model.eval()
+        self.dur_model.to(device)
 
-    def _init_diffusion_model(self, device):
         from tts.modules.llm_dit.dit import Diffusion
         self.dit = Diffusion()
         load_ckpt(self.dit, f'{self.dit_exp_name}', 'dit', strict=False)
-        self.dit.eval().to(device)
+        self.dit.eval()
+        self.dit.to(device)
         self.cfg_mask_token_phone = 302 - 1
         self.cfg_mask_token_tone = 32 - 1
 
-    def _init_aligner_model(self, device):
         from tts.modules.aligner.whisper_small import Whisper
         self.aligner_lm = Whisper()
         load_ckpt(self.aligner_lm, f'{self.frontend_exp_name}', 'model')
-        self.aligner_lm.eval().to(device)
+        self.aligner_lm.eval()
+        self.aligner_lm.to(device)
         self.kv_cache = None
         self.hooks = None
 
-    def _init_g2p_model(self, device):
         from transformers import AutoTokenizer, AutoModelForCausalLM
         g2p_tokenizer = AutoTokenizer.from_pretrained(self.g2p_exp_name, padding_side="right")
         g2p_tokenizer.padding_side = "right"
@@ -160,45 +192,45 @@ class TTSInferencer:
         self.g2p_tokenizer = g2p_tokenizer
         self.speech_start_idx = g2p_tokenizer.encode('<Reserved_TTS_0>')[0]
 
-    def _init_wavvae_model(self, device):
         from tts.modules.wavvae.decoder.wavvae_v3 import WavVAE_V3
-        
         self.hp_wavvae = hp_wavvae = set_hparams(f'{self.wavvae_exp_name}/config.yaml', global_hparams=False)
         self.wavvae = WavVAE_V3(hparams=hp_wavvae)
-        
         if os.path.exists(f'{self.wavvae_exp_name}/model_only_last.ckpt'):
             load_ckpt(self.wavvae, f'{self.wavvae_exp_name}/model_only_last.ckpt', 'model_gen', strict=True)
             self.has_vae_encoder = True
         else:
             load_ckpt(self.wavvae, f'{self.wavvae_exp_name}/decoder.ckpt', 'model_gen', strict=False)
             self.has_vae_encoder = False
-            
-        self.wavvae.eval().to(device)
+        self.wavvae.eval()
+        self.wavvae.to(device)
         self.vae_stride = hp_wavvae.get('vae_stride', 4)
         self.hop_size = hp_wavvae.get('hop_size', 4)
 
-    def preprocess(self, audio_bytes, latent_file=None, **kwargs):
-        wav_bytes = convert_audio_format(audio_bytes, target_sr=self.sr, max_duration=10.0)
-        wav, _ = librosa.load(io.BytesIO(wav_bytes), sr=self.sr)
-        
+    def preprocess(self, audio_bytes, latent_file=None, topk_dur=1, **kwargs):
+        wav_bytes = convert_to_wav_bytes(audio_bytes)
+
+        wav, _ = librosa.core.load(wav_bytes, sr=self.sr)
         ws = hparams['win_size']
         if len(wav) % ws < ws - 1:
             wav = np.pad(wav, (0, ws - 1 - (len(wav) % ws)), mode='constant', constant_values=0.0).astype(np.float32)
         wav = np.pad(wav, (0, 12000), mode='constant', constant_values=0.0).astype(np.float32)
-        
         self.loudness_prompt = self.loudness_meter.integrated_loudness(wav.astype(float))
+
         ph_ref, tone_ref, mel2ph_ref = align(self, wav)
 
         with torch.inference_mode():
-            if latent_file is not None:
-                vae_latent = torch.from_numpy(np.load(latent_file)).to(self.device)
+            if self.has_vae_encoder:
+                wav = torch.FloatTensor(wav)[None].to(self.device)
+                vae_latent = self.wavvae.encode_latent(wav)
                 vae_latent = vae_latent[:, :mel2ph_ref.size(1)//4]
             else:
-                latent_size = mel2ph_ref.size(1)//4
-                vae_latent = torch.zeros((1, latent_size, 32)).to(self.device)
-
+                assert latent_file is not None, "Please provide latent_file in WaveVAE decoder-only mode"
+                vae_latent = torch.from_numpy(np.load(latent_file)).to(self.device)
+                vae_latent = vae_latent[:, :mel2ph_ref.size(1)//4]
+        
+            self.dur_model.hparams["infer_top_k"] = topk_dur if topk_dur > 1 else None
             incremental_state_dur_prompt, ctx_dur_tokens = make_dur_prompt(self, mel2ph_ref, ph_ref, tone_ref)
-
+            
         return {
             'ph_ref': ph_ref,
             'tone_ref': tone_ref,
@@ -211,7 +243,7 @@ class TTSInferencer:
     def forward(self, resource_context, input_text, language_type, time_step, p_w, t_w, 
                 dur_disturb=0.1, dur_alpha=1.0, **kwargs):
         device = self.device
-        
+
         ph_ref = resource_context['ph_ref'].to(device)
         tone_ref = resource_context['tone_ref'].to(device)
         mel2ph_ref = resource_context['mel2ph_ref'].to(device)
@@ -221,18 +253,30 @@ class TTSInferencer:
 
         with torch.inference_mode():
             wav_pred_ = []
-            text_segs = (chunk_text_english(input_text, max_chars=130) if language_type == 'en' 
-                        else chunk_text_chinese(input_text, limit=60))
+            
+            if language_type == 'en':
+                if TEXT_NORMALIZER_AVAILABLE and hasattr(self, 'en_normalizer'):
+                    try:
+                        input_text = self.en_normalizer.normalize(input_text)
+                    except:
+                        pass
+                text_segs = chunk_text_english(input_text, max_chars=130)
+            else:
+                if TEXT_NORMALIZER_AVAILABLE and hasattr(self, 'zh_normalizer'):
+                    try:
+                        input_text = self.zh_normalizer.normalize(input_text)
+                    except:
+                        pass
+                text_segs = chunk_text_chinese(input_text, limit=60)
 
             for seg_i, text in enumerate(text_segs):
                 ph_pred, tone_pred = g2p(self, text)
-                mel2ph_pred = dur_pred(self, ctx_dur_tokens, incremental_state_dur_prompt, 
-                                     ph_pred, tone_pred, seg_i, dur_disturb, dur_alpha,
-                                     is_first=seg_i==0, is_final=seg_i==len(text_segs)-1)
+
+                mel2ph_pred = dur_pred(self, ctx_dur_tokens, incremental_state_dur_prompt, ph_pred, tone_pred, seg_i, dur_disturb, dur_alpha, is_first=seg_i==0, is_final=seg_i==len(text_segs)-1)
                 
-                inputs = prepare_inputs_for_dit(self, mel2ph_ref, mel2ph_pred, ph_ref, 
-                                              tone_ref, ph_pred, tone_pred, vae_latent)
-                with torch.amp.autocast('cuda', dtype=self.precision, enabled=True):
+                inputs = prepare_inputs_for_dit(self, mel2ph_ref, mel2ph_pred, ph_ref, tone_ref, ph_pred, tone_pred, vae_latent)
+                
+                with torch.cuda.amp.autocast(dtype=self.precision, enabled=True):
                     x = self.dit.inference(inputs, timesteps=time_step, seq_cfg_w=[p_w, t_w]).float()
                 
                 x[:, :vae_latent.size(1)] = vae_latent

@@ -2,11 +2,9 @@ import os
 import torch
 import folder_paths
 
-# Import custom modules
 from .tts_inferencer import TTSInferencer
 from .MegaTTS_utils import get_voice_samples, get_voice_path, check_and_download_models, initialize
 
-# TTS model path
 models_dir = folder_paths.models_dir
 model_path = os.path.join(models_dir, "TTS")
 
@@ -16,7 +14,6 @@ class MegaTTS3:
     
     @classmethod
     def INPUT_TYPES(s):
-        # Removed initialization here to prevent startup loading
         voice_samples = get_voice_samples()
         default_voice = voice_samples[0] if voice_samples else ""
         return {
@@ -39,7 +36,6 @@ class MegaTTS3:
                        pronunciation_strength, voice_similarity, 
                        reference_voice):
         
-        # Initialize when the node is actually used
         if not MegaTTS3.initialization_done:
             initialize()
             MegaTTS3.initialization_done = True
@@ -76,6 +72,13 @@ class MegaTTS3:
             p_w=pronunciation_strength,
             t_w=voice_similarity
         )
+        
+        import gc
+        infer_ins = MegaTTS3.infer_instance_cache
+        infer_ins.clean()
+        MegaTTS3.infer_instance_cache = None
+        gc.collect()
+        torch.cuda.empty_cache()
 
         return (audio_output,)
 
@@ -83,7 +86,6 @@ class MegaTTS3S:
     infer_instance_cache = None
     @classmethod
     def INPUT_TYPES(s):
-        # Remove initialization here 
         voice_samples = get_voice_samples()
         default_voice = voice_samples[0] if voice_samples else ""
         return {
@@ -100,7 +102,6 @@ class MegaTTS3S:
     CATEGORY = "🧪AILab/🔊Audio"
 
     def generate_speech(self, input_text, language, reference_voice):
-        # Initialize when the node is actually used
         if not MegaTTS3.initialization_done:
             initialize()
             MegaTTS3.initialization_done = True
@@ -137,56 +138,23 @@ class MegaTTS3S:
             p_w=1.6,     
             t_w=2.5       
         )
+        
+        import gc
+        infer_ins = MegaTTS3S.infer_instance_cache
+        infer_ins.clean()
+        MegaTTS3S.infer_instance_cache = None
+        gc.collect()
+        torch.cuda.empty_cache()
 
         return (audio_output,)
 
-class MegaTTS_CleanMemory:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "any": ("*", {"default": None, "tooltip": "Connect any input to trigger memory cleanup"})
-            }
-        }
-
-    RETURN_TYPES = ("*",)
-    RETURN_NAMES = ("output",)
-    FUNCTION = "clean_memory"
-    CATEGORY = "🧪AILab/🛠️UTIL"
-
-    def clean_memory(self, any):
-        if MegaTTS3.infer_instance_cache is not None:
-            MegaTTS3.infer_instance_cache.clean()
-            MegaTTS3.infer_instance_cache = None
-        
-        if MegaTTS3S.infer_instance_cache is not None:
-            MegaTTS3S.infer_instance_cache.clean()
-            MegaTTS3S.infer_instance_cache = None
-            
-        # Clean other possible caches
-        import sys
-        import gc
-        
-        for module_name in list(sys.modules.keys()):
-            if 'MegaTTS_AudioInput' in module_name:
-                if hasattr(sys.modules[module_name], 'MegaTTS_AudioInput') and hasattr(sys.modules[module_name].MegaTTS_AudioInput, 'infer_instance_cache'):
-                    if sys.modules[module_name].MegaTTS_AudioInput.infer_instance_cache is not None:
-                        sys.modules[module_name].MegaTTS_AudioInput.infer_instance_cache.clean()
-                        sys.modules[module_name].MegaTTS_AudioInput.infer_instance_cache = None
-        
-        gc.collect()
-        torch.cuda.empty_cache()
-        print("✅ MegaTTS memory cleaned successfully")
-        return (any,)
 
 NODE_CLASS_MAPPINGS = {
     "MegaTTS3": MegaTTS3,
-    "MegaTTS3S": MegaTTS3S,
-    "MegaTTS_CleanMemory": MegaTTS_CleanMemory
+    "MegaTTS3S": MegaTTS3S
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "MegaTTS3": "MegaTTS3",
-    "MegaTTS3S": "MegaTTS3 (Simple)",
-    "MegaTTS_CleanMemory": "MegaTTS3 (Clean Memory)"
+    "MegaTTS3S": "MegaTTS3 (Simple)"
 }
