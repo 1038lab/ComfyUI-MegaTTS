@@ -1,8 +1,9 @@
 [project]
 name = "ComfyUI-MegaTTS"
 description = "ComfyUI custom node based on ByteDance's MegaTTS3, supporting Chinese and English text-to-speech with high-quality voice cloning."
-version = "1.0.1"
+version = "1.0.2"
 license = {file = "LICENSE"}
+
 dependencies = ["setproctitle>=1.2.0", "attrdict>=2.0.1", "librosa>=0.9.2", "pydub>=0.25.1", "pyloudnorm>=0.1.0", "x-transformers>=0.25.0", "torchdiffeq>=0.2.2", "openai-whisper>=20230314", "tqdm>=4.65.0", "torch>=2.0.0", "numpy>=1.20.0", "requests>=2.28.0", "pyyaml>=6.0"]
 
 [project.urls]
