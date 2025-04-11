@@ -1,0 +1,62 @@
+{
+  "MegaTTS3" : {
+    "display_name": "MegaTTS3 🔊",
+    "inputs": {
+      "input_text": {
+        "name": "Input Text"
+      },
+      "language": {
+        "name": "Language"
+      },
+      "generation_quality": {
+        "name": "Generation Quality"
+      },
+      "pronunciation_strength": {
+        "name": "Pronunciation Strength"
+      },
+      "voice_similarity": {
+        "name": "Voice Similarity"
+      },
+      "reference_voice": {
+        "name": "Reference Voice"
+      }
+    }
+  },
+  "MegaTTS3S" : {
+    "display_name": "MegaTTS3S 🔊 (Simple)",
+    "inputs": {
+      "input_text": {
+        "name": "Input Text"
+      },
+      "language": {
+        "name": "Language"
+      },
+      "reference_voice": {
+        "name": "Reference Voice"
+      }
+    }
+  },
+  "MegaTTS_VoiceMaker" : {
+    "display_name": "MegaTTS Voice Maker 🔊",
+    "inputs": {
+      "audio_in": {
+        "name": "Audio Input"
+      },
+      "voice_name": {
+        "name": "Voice Name"
+      },
+      "path": {
+        "name": "Path"
+      },
+      "trim_silence": {
+        "name": "Trim Silence"
+      },
+      "normalize_volume": {
+        "name": "Normalize Volume"
+      },
+      "max_duration": {
+        "name": "Max Duration"
+      }
+    }
+  }
+}

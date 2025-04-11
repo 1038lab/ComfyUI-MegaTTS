@@ -1,0 +1,62 @@
+{
+  "MegaTTS3" : {
+    "display_name": "MegaTTS3 🔊",
+    "inputs": {
+      "input_text": {
+        "name": "输入文本"
+      },
+      "language": {
+        "name": "语言"
+      },
+      "generation_quality": {
+        "name": "生成质量"
+      },
+      "pronunciation_strength": {
+        "name": "发音强度"
+      },
+      "voice_similarity": {
+        "name": "声音相似度"
+      },
+      "reference_voice": {
+        "name": "参考声音"
+      }
+    }
+  },
+  "MegaTTS3S" : {
+    "display_name": "MegaTTS3S 🔊 (精简版)",
+    "inputs": {
+      "input_text": {
+        "name": "输入文本"
+      },
+      "language": {
+        "name": "语言"
+      },
+      "reference_voice": {
+        "name": "参考声音"
+      }
+    }
+  },
+  "MegaTTS_VoiceMaker" : {
+    "display_name": "MegaTTS 语音生成器 🔊",
+    "inputs": {
+      "audio_in": {
+        "name": "音频输入"
+      },
+      "voice_name": {
+        "name": "声音名称"
+      },
+      "path": {
+        "name": "路径"
+      },
+      "trim_silence": {
+        "name": "修剪静音"
+      },
+      "normalize_volume": {
+        "name": "标准化音量"
+      },
+      "max_duration": {
+        "name": "最大持续时间"
+      }
+    }
+  }
+}
