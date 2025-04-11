@@ -1,8 +1,19 @@
-# ComfyUI-MegaTTS
+# ComfyUI-MegaTTS 
 
-A ComfyUI custom node based on ByteDance [MegaTTS3](https://huggingface.co/ByteDance/MegaTTS3), enabling high-quality text-to-speech synthesis with voice cloning capabilities for both Chinese and English.
-![comfyui-megaTTS](https://github.com/user-attachments/assets/c395e3f8-099f-4471-bfa3-2d94d682a7cf)
+(**English** / [中文](readme_zh.md))
 
+A ComfyUI custom node based on ByteDance MegaTTS3 [MegaTTS3](https://huggingface.co/ByteDance/MegaTTS3), enabling high-quality text-to-speech synthesis with voice cloning capabilities for both Chinese and English.
+![Comfyui-MegaTTS-NodeSamples](https://github.com/user-attachments/assets/5bd635d4-8338-4dcd-8781-f0be306bc064)
+
+## Update Logs
+
+### Version 1.0.2
+- Reconstructed the code and custom node for optimized performance and better GPU resource management.
+- Added enhanced memory management features to prevent low VRAM users from running out of memory.
+- i18n supported in English and Chinese
+
+### Version 1.0.1
+- Bug Fix
 
 ## Features
 
@@ -35,9 +46,9 @@ A ComfyUI custom node based on ByteDance [MegaTTS3](https://huggingface.co/ByteD
    pip install -r requirements.txt
    ```
 
-3. The node will automatically download required models on first use, or you can manually:
+3. The node will automatically download required models on first use, or you can manually download them:
 
-## Manual Models  Download 
+## Models and Manual Download
 
 This extension uses modified versions of ByteDance's MegaTTS3 models. While the models are automatically downloaded during first use, you can manually download them from Hugging Face:
 
@@ -45,12 +56,28 @@ This extension uses modified versions of ByteDance's MegaTTS3 models. While the 
 
 The models are organized in the following structure:
 ```
-comfyui/models/TTS/MegaTTS3/
-├── aligner_lm/            # Speech-text alignment model
-├── diffusion_transformer/ # Main TTS model
-├── duration_lm/           # Duration prediction model
-├── g2p/                   # Grapheme-to-phoneme model
-└── wavvae/                # WaveVAE vocoder
+model_path/TTS/MegaTTS3/
+  ├── diffusion_transformer/
+  │   ├── config.yaml
+  │   └── model_only_last.ckpt
+  ├── wavvae/
+  │   ├── config.yaml
+  │   └── decoder.ckpt
+  ├── duration_lm/
+  │   ├── config.yaml
+  │   └── model_only_last.ckpt
+  ├── aligner_lm/
+  │   ├── config.yaml
+  │   └── model_only_last.ckpt
+  └── g2p/
+      ├── config.json
+      ├── model.safetensors
+      ├── generation_config.json
+      ├── tokenizer_config.json
+      ├── special_tokens_map.json
+      ├── tokenizer.json
+      ├── vocab.json
+      └── merges.txt
 ```
 
 ### Manual Download Options
@@ -75,7 +102,23 @@ comfyui/models/TTS/MegaTTS3/
    ```
 
 ## Voice Folder and Voice Maker
+
 ![Voice_Maker](https://github.com/user-attachments/assets/b3713f9a-2f70-4bf0-a6f4-7e3110bba987)
+
+> [!IMPORTANT]  
+> The WaveVAE encoder is currently not available. 
+>
+> For security reasons, Bytedance has not uploaded the WaveVAE encoder.
+>
+> You can only use pre-extracted latents (.npy files) for inference. 
+>
+> To synthesize speech for a specific speaker, ensure both the corresponding WAV and NPY files are in the same directory.
+>
+> Refer to the [Bytedance MegaTTS3 repository](https://github.com/bytedance/MegaTTS3) for details on obtaining necessary files or submitting your voice samples.
+
+### Voice Folder Structure
+
+# End of Selection
 
 ### Voice Folder Structure
 
@@ -88,6 +131,21 @@ Voices/
 ├── sample2.wav     # Another reference audio
 └── sample2.npy     # Corresponding features
 ```
+### Getting Voice Samples and NPY Files
+
+1. **Download pre-extracted samples**:
+   - Sample voice WAV and NPY files can be found in this Google Drive folder: [Voice Samples and NPY Files](https://drive.google.com/drive/folders/1QhcHWcy20JfqWjgqZX1YM3I6i9u4oNlr?usp=sharing)
+   - This folder contains pre-extracted NPY files and their corresponding WAV samples organized in subfolders
+
+2. **Submit your own voice samples**:
+   - If you want to use your own voice, you can submit samples to this Google Drive folder: [Voice Submission Queue](https://drive.google.com/drive/folders/1gCWL1y_2xu9nIFhUX_OW5MbcFuB7J5Cl?usp=sharing)
+   - Your samples should be clear audio with minimal background noise and within 24 seconds
+   - After verification for safety, the ByteDance team will extract and provide NPY files for your samples
+
+3. **Generate NPY files with Voice Maker**:
+   - Use the Voice Maker node to automatically process your audio and generate NPY files
+   - While this method is convenient, the quality may not match officially extracted NPY files
+   - Best for quick testing and experimentation with your own voice samples
 
 ### Voice Maker Node
 
@@ -110,27 +168,6 @@ This extension includes a **Voice Maker** custom node that helps you prepare voi
 - **WAV files**: These are the actual voice samples you want to clone (24kHz recommended)
 - **NPY files**: These contain extracted features necessary for voice cloning
 
-### Important Note on NPY Files
-
-As noted in the [original MegaTTS3 repository](https://github.com/bytedance/MegaTTS3):
-
-> For security issues, we do not upload the parameters of WaveVAE encoder to the above links. You can only use the pre-extracted latents (.npy files) for inference. If you want to synthesize speech for speaker A, you need "A.wav" and "A.npy" in the same directory.
-
-### Getting Voice Samples and NPY Files
-
-1. **Download pre-extracted samples**:
-   - Sample voice WAV and NPY files can be found in this Google Drive folder: [Voice Samples and NPY Files](https://drive.google.com/drive/folders/1QhcHWcy20JfqWjgqZX1YM3I6i9u4oNlr?usp=sharing)
-   - This folder contains pre-extracted NPY files and their corresponding WAV samples organized in subfolders
-
-2. **Submit your own voice samples**:
-   - If you want to use your own voice, you can submit samples to this Google Drive folder: [Voice Submission Queue](https://drive.google.com/drive/folders/1gCWL1y_2xu9nIFhUX_OW5MbcFuB7J5Cl?usp=sharing)
-   - Your samples should be clear audio with minimal background noise and within 24 seconds
-   - After verification for safety, the ByteDance team will extract and provide NPY files for your samples
-
-3. **Generate NPY files with Voice Maker**:
-   - Use the Voice Maker node to automatically process your audio and generate NPY files
-   - While this method is convenient, the quality may not match officially extracted NPY files
-   - Best for quick testing and experimentation with your own voice samples
 
 ### Voice Format Requirements
 
@@ -172,7 +209,7 @@ This model offers excellent control over accents and pronunciation:
 
 This extension provides three main nodes:
 
-### 1. MegaTTS3 (Advanced)
+### 1. Mega TTS (Advanced)
 
 Full-featured TTS node with complete parameter control.
 
@@ -188,7 +225,7 @@ Full-featured TTS node with complete parameter control.
 - `AUDIO` - Generated audio in WAV format
 - `LATENT` - Audio latent representation for further processing
 
-### 2. MegaTTS3 (Simple)
+### 2. Mega TTS (Simple)
 
 Simplified TTS node with default parameters for quick usage.
 
@@ -200,6 +237,7 @@ Simplified TTS node with default parameters for quick usage.
 **Outputs:**
 - `AUDIO` - Generated audio in WAV format
 
+### 3. Mega TTS (Clean Memory)
 
 Utility node to free GPU memory after TTS processing.
 
