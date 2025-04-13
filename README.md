@@ -2,7 +2,7 @@
 
 (**English** / [中文](readme_zh.md))
 
-A ComfyUI custom node based on ByteDance MegaTTS3 [MegaTTS3](https://huggingface.co/ByteDance/MegaTTS3), enabling high-quality text-to-speech synthesis with voice cloning capabilities for both Chinese and English.
+A ComfyUI custom node based on ByteDance [MegaTTS3](https://huggingface.co/ByteDance/MegaTTS3), enabling high-quality text-to-speech synthesis with voice cloning capabilities for both Chinese and English.
 ![Comfyui-MegaTTS-NodeSamples](https://github.com/user-attachments/assets/5bd635d4-8338-4dcd-8781-f0be306bc064)
 
 ## Update Logs
