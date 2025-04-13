@@ -2,7 +2,7 @@
 
 ([English](readme.md) / **中文**)
 
-基于字节跳动MegaTTS3 [MegaTTS3](https://huggingface.co/ByteDance/MegaTTS3)的ComfyUI自定义节点，支持中英双语的高质量文本转语音合成及声音克隆功能。
+基于字节跳动[MegaTTS3](https://huggingface.co/ByteDance/MegaTTS3)的ComfyUI自定义节点，支持中英双语的高质量文本转语音合成及声音克隆功能。
 
 ![Comfyui-MegaTTS-NodeSamples zh](https://github.com/user-attachments/assets/750443fe-d6ab-4340-a758-a85bb10aa07f)
 
